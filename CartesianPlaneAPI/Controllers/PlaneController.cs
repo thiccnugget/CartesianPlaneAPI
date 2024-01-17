@@ -1,21 +1,24 @@
 ﻿using CartesianPlaneAPI.Classes;
 using CartesianPlaneAPI.Models;
 using Microsoft.AspNetCore.Mvc;
-using System.Diagnostics;
 
 
 namespace CartesianPlaneAPI.Controllers
 {
-    //[Route("[controller]")]
+    [Route("/")]
     [ApiController]
     public class PlaneController : Controller
     {
-        //Set of unique points in the space
-        //private static HashSet<Point> points = new HashSet<Point>();
-        private static HashSet<Point> points = GenerateRandomPoints(100);
+        //Set of unique, sorted points in the space
+        private static SortedSet<Point> points = new SortedSet<Point>();
 
         #region GET
 
+
+        /// <summary>
+        /// Returns all points in the space
+        /// </summary>
+        /// <returns>A SortedSet of points</returns>
         [HttpGet("Space")]
         public async Task<ActionResult> GetSpacePoints()
         {
@@ -27,19 +30,18 @@ namespace CartesianPlaneAPI.Controllers
         }
 
 
-        [HttpGet("Lines/{n}")]
+        /// <summary>
+        /// Returns all line segments passing through <paramref name="n"/> points
+        /// </summary>
+        /// <param name="n">Minimum number of points the segment must pass through</param>
+        /// <returns>An HashSet of segments, represented by a SortedSet of points</returns>
+        [HttpGet("Lines/{n?}")]
         public async Task<ActionResult> GetSpaceLines(int n)
         {
-            Stopwatch stopwatch = new Stopwatch();
-
-            stopwatch.Start();
-            var data = GetLines(n);
-            stopwatch.Stop();
-
             return StatusCode(200, new APIResponse()
             {
-                msg = $"Lines passing through {n} points. Completed in {stopwatch.ElapsedMilliseconds} milliseconds",
-                data = data
+                msg = $"Lines passing through {n} points.",
+                data = GetLines(n)
             });
         }
 
@@ -47,6 +49,9 @@ namespace CartesianPlaneAPI.Controllers
 
         #region DELETE
 
+        /// <summary>
+        /// Deletes all points from the space
+        /// </summary>
         [HttpDelete("Space")]
         public async Task<ActionResult> DeleteSpacePoints()
             {
@@ -60,12 +65,16 @@ namespace CartesianPlaneAPI.Controllers
             #endregion
 
         #region POST
-
+        /// <summary>
+        /// Creates a point in the space
+        /// </summary>
+        /// <param name="point">object with x and y numeric coordinates</param>
+        /// <returns></returns>
         [HttpPost("Point")]
         public async Task<ActionResult> CreatePoint(CartesianPlaneDTO point)
         {
-            var status = points.Add(new Point(point.x, point.y));
-            return status == true
+            bool added = points.Add(new Point(point.x, point.y));
+            return added == true
                 ? StatusCode(201, new APIResponse()
                 {
                     msg = $"Point {point.x},{point.y} created"
@@ -82,79 +91,85 @@ namespace CartesianPlaneAPI.Controllers
 
         #region UTILS
         /// <summary>
-        /// Returns a list of sets of points representing a line segment 
+        /// Returns a set of sets of points each one representing a line segment 
         /// </summary>
         /// <param name="minPoints">Minimum number of points the segment must pass through</param>
         /// <returns></returns>
-        HashSet<HashSet<Point>> GetLines(int minPoints)
+        HashSet<SortedSet<Point>> GetLines(int minPoints)
         {
+            //Set of segments to return
+            HashSet<SortedSet<Point>> segments = new HashSet<SortedSet<Point>>();
 
-            HashSet<HashSet<Point>> segments = new HashSet<HashSet<Point>>();
 
-            foreach (var p1 in points)
+            //Cycle each point on the plane starting from the lowest X coordinate
+            foreach(Point p1 in points)
             {
-                foreach (var p2 in points.Reverse())
+                //Cycle each point on the plane starting from the highest X coordinate
+                foreach (Point p2 in points.Reverse())
                 {
+                    //check next point if points p1 and p2 are the same
                     if (p1.Equals(p2)) continue;
 
-                    HashSet<Point> segment = new HashSet<Point> { p1, p2 };
-                    double slope = 0;
-                    double yIntercept = 0;
+                    double slope;
+                    double yIntercept;
 
                     try
                     {
-                        // Calculate the equation of the line
+                        //Calculate the equation of the line
+                        //This may throw a DivisionByZero exception
                         slope = (double)(p2.y - p1.y) / (p2.x - p1.x);
                         yIntercept = p1.y - slope * p1.x;
                     }
                     catch
                     {
+                        //Possible division by zero, skip and check next point
                         continue;
                     }
-                    
-                    //Check how many / which points satisfy the equation
-                    foreach (var p in points)
-                    {
-                        if (!p.Equals(p1) && !p.Equals(p2) && IsOnLine(p, slope, yIntercept))
-                        {
-                            segment.Add(p);
-                        }
-                    }
 
+                    //Create the segment and add points p1 and p2
+                    SortedSet<Point> segment = new SortedSet<Point> { p1, p2 };
+
+                    //Add all filtered points that are not equal to p1 and p2 and lay on the same line to the segment
+                    segment.UnionWith(points.Where(p => !p.Equals(p1) && !p.Equals(p2) && IsOnSameLine(p, slope, yIntercept)));
+                    
+                    //Add this segment to the set to be returned if the quantity of points it passes through is equal or greater than specified
+                    //Also check if the current segment has not already been added to the segments set
                     if (segment.Count >= minPoints && !segments.Any(s => s.SetEquals(segment)))
                     {
                         segments.Add(segment);
                     }
-                                        
+                    
                 }
             }
 
             return segments;
         }
 
-        bool IsOnLine(Point p, double slope, double yIntercept)
-        {
-            return Math.Abs(p.y - (slope * p.x + yIntercept)) < double.Epsilon;
-        }
+        /// <summary>
+        /// Check if point lays on the same line
+        /// Must satisfy the equation: y = mx + q
+        /// </summary>
+        /// <param name="p"> point to check </param>
+        /// <param name="slope"> line slope </param>
+        /// <param name="yIntercept"> point where the line intercepts the y axis </param>
+        /// <returns>true if the point lays on the same line, else returns false</returns>
+        bool IsOnSameLine(Point p, double slope, double yIntercept) => p.y == (slope * p.x + yIntercept);
 
 
-        static HashSet<Point> GenerateRandomPoints(int count)
+        //Use this method to test and populate the plane with random points, Case test only
+        static SortedSet<Point> GenerateRandomPoints(int count)
         {
             Random random = new Random();
-            HashSet<Point> points = new HashSet<Point>();
+            SortedSet<Point> points = new SortedSet<Point>();
 
-            for (int i = 0; i < count; i++)
+            while(points.Count() < count)
             {
-                double x = Math.Round(random.NextDouble() * 100, 1); // Adjust the range as needed
-                double y = Math.Round(random.NextDouble() * 100, 1); // Adjust the range as needed
-
+                double x = Math.Round(random.NextDouble() * 100, 0)/2;
+                double y = Math.Round(random.NextDouble() * 100, 0)/2;
                 points.Add(new Point(x, y));
             }
 
-            List<Point> t = points.ToList();
-            t.Sort();
-
-            return t.ToHashSet();
+            return points;
         }
 
         #endregion

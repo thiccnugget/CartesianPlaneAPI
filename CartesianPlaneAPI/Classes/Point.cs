@@ -30,6 +30,7 @@ namespace CartesianPlaneAPI.Classes
             return false;
         }
 
+        //Implement the CompareTo method of the IComparable interface
         public int CompareTo(Point? other)
         {
             int xComparison = x.CompareTo(other.x);

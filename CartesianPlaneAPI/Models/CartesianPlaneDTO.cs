@@ -1,12 +1,13 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 
 namespace CartesianPlaneAPI.Models
 {
     public class CartesianPlaneDTO
     {
-        [JsonPropertyName("x")]
         [JsonRequired]
+        [JsonPropertyName("x")]
         public int x { get; set; }
 
         [JsonPropertyName("y")]
