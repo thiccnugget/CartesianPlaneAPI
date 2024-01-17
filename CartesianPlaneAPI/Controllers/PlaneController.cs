@@ -35,9 +35,17 @@ namespace CartesianPlaneAPI.Controllers
         /// </summary>
         /// <param name="n">Minimum number of points the segment must pass through</param>
         /// <returns>An HashSet of segments, represented by a SortedSet of points</returns>
-        [HttpGet("Lines/{n?}")]
+        [HttpGet("Lines/{n}")]
         public async Task<ActionResult> GetSpaceLines(int n)
         {
+            if(n < 2)
+            {
+                return StatusCode(400, new APIResponse()
+                {
+                    msg = "Must request at least 2 points in param /lines/n"
+                });
+            }
+
             return StatusCode(200, new APIResponse()
             {
                 msg = $"Lines passing through {n} points.",
